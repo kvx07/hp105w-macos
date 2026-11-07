@@ -1,0 +1,13 @@
+# 编译产物
+build/
+bin/vendor/
+HP105w-Print.app/
+
+# macOS
+.DS_Store
+._*
+
+# 编辑器
+.idea/
+.vscode/
+*.swp

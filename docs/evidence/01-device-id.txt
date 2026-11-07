@@ -1,0 +1,7 @@
+=== 1) device-id / 支持的文档格式 ===
+        printer-make-and-model (textWithoutLanguage) = HP Laser 105w
+        document-format-supported (1setOf mimeMediaType) = application/octet-stream,application/PCLm
+        ipp-features-supported (1setOf keyword) = document-object,airprint-2.1
+        printer-device-id (textWithoutLanguage) = MFG:HP;CMD:SPL,URF,FWV,PIC,EXT,DCU,PWGRaster;PRN:A00F0A;MDL:HP Laser 101-105;CLS:PRINTER;CID:HPLJPCLMSMV1;MODE:SPL3,R000105,SCP;
+        printer-firmware-name (1setOf nameWithoutLanguage) = System Firmware Version,IPP,URF
+        mopria-certified (textWithoutLanguage) = 2.2

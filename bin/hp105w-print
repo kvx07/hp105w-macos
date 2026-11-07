@@ -1,0 +1,171 @@
+#!/usr/bin/env bash
+# hp105w-print — HP Laser 105w 用户态驱动（macOS，无需厂商驱动，无需 root）
+#
+#   管道: 文档 -> CUPS raster (cgpdftoraster) -> QPDL/SPL3 (rastertoqpdl) -> TCP :9100
+#
+# 许可: GPL-2.0（因为链入 SpliX 的 rastertoqpdl；见 LICENSE）
+set -uo pipefail
+
+VERSION="1.0.0"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PPD="$ROOT/ppd/HP_Laser_105w.ppd"
+R2Q="$ROOT/bin/vendor/rastertoqpdl"
+CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/hp105w/config"
+
+# shellcheck source=../scripts/lib.sh
+LIB="$ROOT/scripts/lib.sh"
+[ -r "$LIB" ] && . "$LIB"
+
+# ------------------------------------------------------------------ 配置
+HOST="${HP105W_HOST:-}"
+PORT="${HP105W_PORT:-9100}"
+MEDIA="${HP105W_MEDIA:-A4}"
+RESOLUTION="${HP105W_RESOLUTION:-600dpi}"
+# shellcheck disable=SC1090
+[ -r "$CONFIG" ] && . "$CONFIG"
+
+COPIES=1
+VERIFY=0
+DRY=0
+QUIET=0
+FILES=()
+
+say() { [ "$QUIET" = 1 ] || printf '%s\n' "$*"; }
+die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
+
+usage() {
+  cat <<EOF
+hp105w-print $VERSION — HP Laser 105w 自写驱动（macOS）
+
+用法: hp105w-print [选项] 文件...
+
+选项:
+  -c N            份数（默认 1）
+  -m 纸张         默认 A4
+  -r 精度         默认 600dpi
+  -w, --wait      发送后等打印机打完，并报告实际出纸页数
+  -n, --dry-run   只做转换，不发到打印机（产物保留在临时目录并打印路径）
+  -q, --quiet     静默
+  -H HOST         打印机 IP / 主机名
+  -p PORT         raw 端口（默认 9100）
+  -v, --version   版本
+  -h, --help      本帮助
+
+配置: 可写入 $CONFIG
+  HOST=192.168.31.194
+  PORT=9100
+  MEDIA=A4
+  RESOLUTION=600dpi
+
+示例:
+  hp105w-print 报告.pdf
+  hp105w-print -w -c 2 合同.pdf 发票.pdf
+  hp105w-print -n 论文.pdf
+EOF
+}
+
+VERSION_FLAG=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -c) COPIES="${2:-}"; [ -n "$COPIES" ] || die "-c 需要一个数字"; shift 2 ;;
+    -m) MEDIA="${2:-}";  [ -n "$MEDIA" ]  || die "-m 需要纸张名";  shift 2 ;;
+    -r) RESOLUTION="${2:-}"; [ -n "$RESOLUTION" ] || die "-r 需要精度"; shift 2 ;;
+    -H) HOST="${2:-}";   shift 2 ;;
+    -p) PORT="${2:-}";   shift 2 ;;
+    -w|--wait)    VERIFY=1; shift ;;
+    -n|--dry-run) DRY=1; shift ;;
+    -q|--quiet)   QUIET=1; shift ;;
+    -v|--version) VERSION_FLAG=1; shift ;;
+    -h|--help)    usage; exit 0 ;;
+    --) shift; while [ $# -gt 0 ]; do FILES+=("$1"); shift; done ;;
+    -*) die "未知选项: $1（-h 查看帮助）" ;;
+    *)  FILES+=("$1"); shift ;;
+  esac
+done
+
+[ "$VERSION_FLAG" = 1 ] && { echo "hp105w-print $VERSION"; exit 0; }
+[ "${#FILES[@]}" -ge 1 ] || { usage >&2; exit 2; }
+for f in "${FILES[@]}"; do [ -r "$f" ] || die "读不到文件: $f"; done
+
+[ -x "$R2Q" ] || die "缺少 QPDL 编码器：${R2Q}（先运行 ./scripts/build.sh）"
+[ -f "$PPD" ] || die "缺少 PPD：${PPD}（先运行 ./scripts/build.sh）"
+command -v cupsfilter >/dev/null || die "缺少 cupsfilter（系统自带，检查 PATH）"
+
+# ------------------------------------------------------------------ 发现打印机
+if [ -z "$HOST" ]; then
+  HOST="$(hp105w_discover_host 4 || true)"
+  if [ -z "$HOST" ]; then
+    if [ "$DRY" = 1 ]; then
+      HOST="127.0.0.1"
+      say "未发现打印机；dry-run 模式下继续（不发送）"
+    else
+      die "没发现打印机。用 -H <IP> 指定，或写进 $CONFIG"
+    fi
+  else
+    say "发现打印机: $HOST"
+  fi
+fi
+
+# ------------------------------------------------------------------ 计数器 / 空闲等待
+page_count() { hp105w_page_count "$HOST"; }
+wait_idle()  { hp105w_wait_idle "$HOST" 60; }
+
+# ------------------------------------------------------------------ 主流程
+if [ "$DRY" = 0 ]; then
+  nc -z -G 3 "$HOST" "$PORT" >/dev/null 2>&1 \
+    || die "连不上 $HOST:$PORT —— 检查打印机开机 / Wi-Fi / IP 是否变了"
+fi
+
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/hp105w.XXXXXX")"
+cleanup() { [ "$DRY" = 1 ] && say "转换产物: $WORK" || rm -rf "$WORK"; }
+trap cleanup EXIT
+
+idx=0
+for f in "${FILES[@]}"; do
+  idx=$((idx + 1))
+  base="$(basename "$f")"
+  say "[$idx/${#FILES[@]}] $base"
+
+  say "  → 光栅化 ($RESOLUTION, $MEDIA)"
+  if ! cupsfilter -p "$PPD" -m application/vnd.cups-raster \
+        -o "media=$MEDIA" -o "Resolution=$RESOLUTION" "$f" \
+        > "$WORK/$idx.raster" 2> "$WORK/$idx.cf.log"; then
+    printf '  ! 光栅化失败\n' >&2; tail -5 "$WORK/$idx.cf.log" >&2; continue
+  fi
+  [ -s "$WORK/$idx.raster" ] || { printf '  ! 光栅化为空\n' >&2; continue; }
+
+  say "  → 编码 QPDL (SPL3)"
+  if ! PPD="$PPD" "$R2Q" 1 "$(id -un)" "$base" "$COPIES" "" \
+        "$WORK/$idx.raster" > "$WORK/$idx.spl" 2> "$WORK/$idx.r2q.log"; then
+    printf '  ! QPDL 编码失败\n' >&2; tail -5 "$WORK/$idx.r2q.log" >&2; continue
+  fi
+
+  bytes="$(wc -c < "$WORK/$idx.spl" | tr -d ' ')"
+  if [ "$DRY" = 1 ]; then
+    say "  ✓ 已生成 $bytes 字节（未发送）"
+    continue
+  fi
+
+  wait_idle
+  before="$(page_count || true)"
+  say "  → 发送 $bytes 字节到 $HOST:$PORT"
+  if ! nc -w 60 "$HOST" "$PORT" < "$WORK/$idx.spl"; then
+    printf '  ! 发送失败\n' >&2; continue
+  fi
+  say "  ✓ 已发送"
+
+  if [ "$VERIFY" = 1 ] && [ -n "${before:-}" ]; then
+    i=0
+    while [ "$i" -lt 40 ]; do
+      sleep 3; i=$((i + 1))
+      now="$(page_count || true)"
+      [ -n "${now:-}" ] || break
+      if [ "$now" != "$before" ]; then
+        say "  ✓ 出纸 $((now - before)) 页（页计数器 $before → ${now}）"
+        break
+      fi
+    done
+  fi
+done
+
+say "完成。"

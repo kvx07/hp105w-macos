@@ -1,0 +1,34 @@
+--- splix-master/ml2160.ppd	2026-08-20 05:36:20
++++ ppd/HP_Laser_105w_Splix.ppd	2026-11-07 14:07:48
+@@ -1,16 +1,16 @@
+ *PPD-Adobe: "4.3"
+-*%%%% PPD file for ML-2160 with CUPS.
++*%%%% PPD file for HP Laser 105w (Samsung SPL/QPDL engine) with CUPS.
+ *%%%% Created by the CUPS PPD Compiler CUPS v1.7rc1.
+ *FormatVersion: "4.3"
+ *FileVersion: "2.0.0"
+ *LanguageVersion: English
+ *LanguageEncoding: ISOLatin1
+ *PCFileName: "ml2160.ppd"
+-*Product: "(ML-2160)"
+-*Manufacturer: "Samsung"
+-*ModelName: "Samsung ML-2160"
+-*ShortNickName: "Samsung ML-2160"
+-*NickName: "Samsung ML-2160, 2.0.0"
++*Product: "(HP Laser 105w)"
++*Manufacturer: "HP"
++*ModelName: "HP Laser 105w"
++*ShortNickName: "HP Laser 105w"
++*NickName: "HP Laser 105w (SPL/QPDL), 1.0"
+ *PSVersion: "(3010.000) 0"
+ *LanguageLevel: "3"
+ *ColorDevice: False
+@@ -35,7 +35,7 @@
+ *cupsLanguages: "en"
+ *OpenUI *PageSize/Media Size: PickOne
+ *OrderDependency: 10 AnySetup *PageSize
+-*DefaultPageSize: Letter
++*DefaultPageSize: A4
+ *PageSize Letter/US Letter: "<</PageSize[612 792]/ImagingBBox null>>setpagedevice"
+ *PageSize Legal/US Legal: "<</PageSize[612 1008]/ImagingBBox null>>setpagedevice"
+ *PageSize A4/A4: "<</PageSize[595 842]/ImagingBBox null>>setpagedevice"

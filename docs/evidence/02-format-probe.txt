@@ -1,0 +1,4 @@
+=== 2) 逐格式探测（固件拒绝矩阵） ===
+image/urf                  -> client-error-document-format-not-supported
+image/pwg-raster           -> client-error-document-format-not-supported
+application/pdf            -> client-error-document-format-not-supported
