@@ -1,0 +1,49 @@
+name: 机型适配反馈
+description: 报告某台 HP Laser 打印机在本驱动下的结果
+title: "[兼容性] <机型> / <macOS 版本> / <结果>"
+labels: [compatibility]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！请先运行 `./scripts/diagnose.sh`，把输出贴到下面。
+  - type: input
+    id: model
+    attributes:
+      label: 打印机型号
+      placeholder: HP Laser 105w
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS 版本
+      description: 运行 `sw_vers -productVersion`
+      placeholder: "26.3"
+    validations:
+      required: true
+  - type: textarea
+    id: diagnose
+    attributes:
+      label: diagnose.sh 输出
+      description: 粘贴 `./scripts/diagnose.sh` 的完整输出（含 printer-device-id）
+      render: shell
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: 结果
+      options:
+        - 完全正常
+        - 能打但有条带/乱码
+        - 只出空白页
+        - 完全不出纸
+        - 安装失败
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: 其他信息
+      description: 页计数器是否 +1、试过的 BandSize、出错日志等
